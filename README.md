@@ -1,81 +1,52 @@
-# Agentic Universe: Junior SDE Take-Home (Data & Workflow)
+# Interaction Ledger & Reporting Pipeline
 
-Thanks for your interest in Agentic Universe. We build AI voice agents for insurers, lenders and
-consumer brands across India and APAC. Our platform has three layers:
+**Agentic Universe · Junior SDE take-home · Assignment A**
 
-- **Data:** leads, call events, dispositions and the interaction ledger that every client report
-  is built on.
-- **Workflow:** campaigns, scheduling, dialling, retries and callbacks, all orchestrated durably.
-- **Application:** dashboards, consoles and APIs.
+Import messy lead CSVs and out-of-order call events into SQLite, then generate five reproducible reports. Built for **Python 3.11+** with the standard library.
 
-This take-home focuses on **data** and **workflow**. **Pick one assignment.** Don't do both.
+<p align="center">
+  <img src="solution/assets/pipeline.png" alt="CSV leads and JSONL call events flow into a SQLite ledger, which produces five reports." width="460">
+</p>
 
-| | Assignment | You'll mostly be doing |
-|---|---|---|
-| **A** | [Interaction Ledger & Reporting Pipeline](assignment-a-data/README.md) | Messy-data ingestion, schema design, idempotent pipelines, exact metrics |
-| **B** | [Durable Campaign Dispatcher](assignment-b-workflow/README.md) | State machines, idempotency, failure handling, scheduling under constraints |
+[Quick start](#quick-start) · [Report outputs](#report-outputs) · [Design and test results](SUBMISSION.md) · [AI disclosure](AI_USAGE.md)
 
-Both are judged on the same bar. Pick the one that excites you more.
+## Quick start
 
-## Ground rules
+From the repository root, run this PowerShell demo against a fresh database. [Bash instructions](SUBMISSION.md#how-to-run) are also available.
 
-- **Time box:** plan for about **6–8 focused hours**. You have **72 hours** from when you receive
-  this. We know you have a life. If you run out of time, stop and tell us in `SUBMISSION.md`
-  what you'd do next. A well-explained partial solution beats a rushed complete one.
-- **Language:** Python 3.11+. Use any libraries you like; list them in `requirements.txt`.
-- **AI tools** (Claude, Cursor, Copilot, ChatGPT...) are **allowed**, as they would be on the
-  job. You must fill in [`AI_USAGE.md`](AI_USAGE.md) honestly. In the follow-up interview we'll
-  ask you to walk through your code and change it live. Submit only code you understand and can
-  defend.
-- **Ambiguity is intentional in places.** When the spec doesn't decide something, make a
-  reasonable call and write it down in `SUBMISSION.md`. Don't wait for an answer from us.
-- **Synthetic data only.** Everything here is generated. No real customer data is involved.
-
-## Getting started
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-# then follow your chosen assignment's README
+```powershell
+python assignment-a-data/tools/generate_data.py --seed 42 --scale small --out data
+$env:LEDGER_HMAC_KEY = python -c "import secrets; print(secrets.token_hex(32))"
+python -m solution --db demo.sqlite3 ingest data/drop_1 data/drop_2
+python -m solution --db demo.sqlite3 report --out reports
+python -m unittest discover -v
 ```
 
-`docker-compose.yml` starts a local Postgres if you want one (`docker compose up -d`). SQLite
-is equally acceptable.
+Reuse the same key for future imports into this database. The report command can run without the key.
 
-## What to submit
+## Architecture
 
-1. Push your work to a **private** GitHub or GitLab repository. Start from this repo and keep
-   its structure. Put your code in `solution/` (or a similar top-level folder) and keep the
-   original files unmodified.
-2. Your repo must include:
-   - `SUBMISSION.md`: fill in the template provided
-   - `AI_USAGE.md`: fill in the template provided
-   - Exact setup and run commands that work from a clean clone
-   - Tests, runnable with one command (for example `pytest`)
-3. Give read access to **`[[REVIEWER_HANDLES]]`** and email the repo link to
-   **`[[SUBMISSION_EMAIL]]`** before the deadline.
+| Stage | Responsibility |
+| :--- | :--- |
+| **Validate inputs** | Resolve CSV headers against the workflow schema, normalize values and record rejected rows. |
+| **Persist in SQLite** | Merge leads by workflow and keyed phone identity. Store each event ID once in the append-only ledger. Commit the drop and its counters together. |
+| **Resolve call history** | Match events against the current lead set. Later drops can resolve earlier orphans. Valid supervisor overrides take precedence over automated dispositions. |
+| **Build reports** | Read one consistent snapshot and derive batch, daily and lead metrics alongside rejection and quality outputs. |
 
-Please **don't** publish your solution publicly, and **don't** commit generated data, `.env`
-files, or databases.
+**Privacy and replay.** SQLite stores keyed hashes for names and phone identities. The lead report uses a masked phone number. An exact drop replay leaves the database unchanged.
 
-## What happens next
+## Report outputs
 
-If your submission clears the bar, we'll schedule a **45-minute technical conversation**:
+| File | What it shows |
+| --- | --- |
+| `batch_summary.csv` | Lead counts by batch and progress bucket |
+| `daily_overview.csv` | Daily call volume, connectivity and distinct successful leads in IST |
+| `lead_report.csv` | Masked lead-level call history summary and effective disposition |
+| `rejections.csv` | Row-level rejection reasons without raw lead values |
+| `data_quality.json` | Ingestion totals, duplicates, warnings and unresolved events |
 
-- 15 min: you walk us through your design and the decisions in `SUBMISSION.md`
-- 20 min: we change a requirement and you extend your code live (AI tools allowed; screen
-  share)
-- 10 min: your questions for us
+## Verification
 
-## What we look for
+Five automated tests cover validation, disposition priority, lead buckets, replay, rollback and checks for plaintext PII. On synthetic seeds **42** and **137**, separate and combined imports produced byte-identical reports. Replaying the drops left the database bytes unchanged.
 
-| Signal | What good looks like |
-|---|---|
-| Correctness | It produces the right answer on data and seeds you haven't seen |
-| Robustness | It behaves sensibly when inputs are dirty, things fail, or it's run twice |
-| Design | Clear data and state model; you can explain why it's safe |
-| Code quality | Readable, organised, tested where it matters |
-| Communication | Honest about trade-offs, assumptions and what's missing |
-| Ownership | You made decisions instead of waiting to be told |
-
-Good luck. We're looking forward to reading your work.
+[Source code](solution/) · [Assignment specification](assignment-a-data/README.md) · [Original repository instructions](docs/UPSTREAM_README.md)

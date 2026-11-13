@@ -1,6 +1,6 @@
 # Assignment A solution
 
-See the [project overview and quick start](../.github/README.md) for the pipeline diagram and run commands.
+See the [project overview and quick start](../README.md) for the pipeline diagram and run commands.
 
 | Module | Responsibility |
 | --- | --- |
